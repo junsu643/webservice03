@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>웹서비스설계 9주차 실습 · 대용량 검색·정렬·페이징 라이브 시스템</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+  <style>
+    :root {
+      --primary: #0066cc;
+      --primary-soft: #eaf2ff;
+      --ink: #161a22;
+      --muted: #596579;
+      --line: #dce1eb;
+      --light: #f6f8fb;
+      --danger: #d9383a;
+      --success: #0d8a4f;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 30px;
+      background: #e6e8ed;
+      font-family: Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      color: var(--ink);
+    }
+    .wrapper {
+      max-width: 1500px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 58fr 42fr;
+      gap: 24px;
+      align-items: start;
+    }
+    .panel {
+      background: white;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 24px 28px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+    }
+    header.panel-head {
+      margin-bottom: 20px;
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 16px;
+    }
+    header h1 {
+      font-size: 24px;
+      margin: 0 0 6px;
+      font-weight: 800;
+      color: var(--ink);
+    }
+    header p {
+      font-size: 15px;
+      color: var(--muted);
+      margin: 0;
+    }
+
+    .tab-bar {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    .tab-btn {
+      padding: 8px 16px;
+      border: 1px solid var(--line);
+      background: var(--light);
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      color: var(--muted);
+      transition: all 0.15s;
+    }
+    .tab-btn.active {
+      background: var(--primary);
+      color: white;
+      border-color: var(--primary);
+    }
+
+    .controls {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 16px;
+      align-items: center;
+      background: #fafbfe;
+      padding: 12px 16px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+    }
+    .input-text {
+      flex: 1;
+      padding: 8px 12px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      font-size: 14px;
+      outline: none;
+    }
+    .input-text:focus { border-color: var(--primary); }
+    .select-box {
+      padding: 8px 12px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      font-size: 14px;
+      background: white;
+    }
+    .btn {
+      padding: 8px 16px;
+      background: var(--primary);
+      color: white;
+      border: 0;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .btn:hover { background: #0052a3; }
+    .btn:disabled { background: #aab4c5; cursor: not-allowed; }
+    .select-box:disabled { background: var(--light); color: #8d9aaf; cursor: not-allowed; }
+    .note { font-size: 13px; color: var(--muted); margin: -6px 0 14px; min-height: 18px; }
+    .result-info { font-size: 13px; color: var(--muted); margin: 0 0 8px; }
+    .loading { opacity: .55; transition: opacity .15s; }
+
+    .table-wrap {
+      overflow-x: auto;
+      min-height: 420px;
+    }
+    table.data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    table.data-table th {
+      background: var(--light);
+      color: var(--muted);
+      text-align: left;
+      padding: 10px 14px;
+      border-bottom: 2px solid var(--line);
+      font-weight: 600;
+    }
+    table.data-table td {
+      padding: 11px 14px;
+      border-bottom: 1px solid #edf0f5;
+      color: var(--ink);
+    }
+    table.data-table tr:hover td { background: #fbfdff; }
+
+    .paging-bar {
+      display: flex;
+      justify-content: center;
+      gap: 6px;
+      margin-top: 20px;
+    }
+    .page-btn {
+      border: 1px solid var(--line);
+      background: white;
+      padding: 5px 12px;
+      border-radius: 4px;
+      font-size: 13px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .page-btn.active {
+      background: var(--primary);
+      color: white;
+      border-color: var(--primary);
+    }
+
+    .more-wrap {
+      display: flex;
+      justify-content: center;
+      margin-top: 20px;
+    }
+
+    .inspector-title {
+      font-size: 14px;
+      font-weight: 750;
+      color: var(--primary);
+      margin-bottom: 6px;
+      display: flex;
+      justify-content: space-between;
+    }
+    .code-block {
+      background: var(--light);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 10px 14px;
+      font: 13px/1.5 Menlo, Consolas, monospace;
+      color: var(--ink);
+      white-space: pre-wrap;
+      word-break: break-all;
+      margin-bottom: 14px;
+    }
+    .code-block.json {
+      max-height: 180px;
+      overflow-y: auto;
+      color: #047857;
+    }
+    .badge-latency {
+      font: 700 12px Menlo, monospace;
+      padding: 2px 8px;
+      border-radius: 4px;
+      background: #e6f7ef;
+      color: var(--success);
+    }
+  </style>
+</head>
+<body>
+
+<div class="wrapper">
+  <div class="panel">
+    <header class="panel-head">
+      <h1>게시판 클라이언트 (SPA 환경)</h1>
+      <p>1,000건의 대용량 데이터셋에서 실시간 검색, 동적 정렬, 오프셋 vs 커서 페이징을 테스트합니다.</p>
+    </header>
+
+    <div class="tab-bar">
+      <button class="tab-btn active" id="tabOffset" onclick="switchMode('offset')">오프셋 번호 페이징 (LIMIT/OFFSET)</button>
+      <button class="tab-btn" id="tabCursor" onclick="switchMode('cursor')">커서 기반 페이징 (WHERE id &lt; ?)</button>
+    </div>
+
+    <div class="controls">
+      <input type="text" id="searchInput" class="input-text" placeholder="검색어 입력 (300ms 디바운스 적용)...">
+      <select id="sortSelect" class="select-box">
+        <option value="latest">최신순 (created_at DESC, id DESC)</option>
+        <option value="views">조회수순 (views DESC, id DESC)</option>
+        <option value="oldest">오래된순 (created_at ASC, id ASC)</option>
+      </select>
+      <button class="btn" onclick="applySearch()">조회</button>
+    </div>
+    <div class="note" id="modeNote"></div>
+
+    <div class="result-info" id="resultInfo"></div>
+    <div class="table-wrap" id="tableWrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th style="width:70px;">번호</th>
+            <th>제목</th>
+            <th style="width:80px;">작성자</th>
+            <th style="width:75px;">조회수</th>
+            <th style="width:95px;">작성일</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody">
+        </tbody>
+      </table>
+    </div>
+
+    <div class="paging-bar" id="paginationBar"></div>
+
+    <div class="more-wrap" id="cursorMoreWrap" style="display:none;">
+      <button class="btn" id="btnMore" onclick="loadMoreCursor()">다음 10개 더 불러오기 (Keyset)</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <header class="panel-head">
+      <h1>백엔드 &amp; DB 파이프라인 검사기</h1>
+      <p>프론트엔드 상태 변화에 따라 실제로 백엔드에 전송된 요청과 실행된 SQL을 모니터링합니다.</p>
+    </header>
+
+    <div>
+      <div class="inspector-title">
+        <span>① 전송된 HTTP 요청 URL</span>
+        <span class="badge-latency" id="latencyBadge">0.00ms</span>
+      </div>
+      <div class="code-block" id="inspectUrl">GET /api/posts?page=1&limit=10&sort=latest</div>
+    </div>
+
+    <div>
+      <div class="inspector-title">② 데이터베이스 실행 SQL (보안 파라미터 바인딩)</div>
+      <div class="code-block" style="color:#0066cc; font-weight:600;" id="inspectSql">SELECT * FROM posts ORDER BY created_at DESC, id DESC LIMIT 10 OFFSET 0;</div>
+    </div>
+
+    <div>
+      <div class="inspector-title">③ 백엔드 표준 Envelope JSON 응답</div>
+      <div class="code-block json" id="inspectJson">{ "items": [], "meta": {} }</div>
+    </div>
+
+    <div style="background:var(--light); border:1px solid var(--line); border-radius:8px; padding:14px; font-size:13.5px; color:var(--muted); line-height:1.6;">
+      <b>💡 실무 엔지니어링 체크포인트:</b><br>
+      • 검색창에 빠르게 타자를 칠 때 300ms 디바운스로 단 1회만 호출되는지 확인하세요.<br>
+      • 새 검색어를 칠 때 이전 진행 중이던 비동기 fetch가 <code>AbortController</code>로 안전하게 취소됩니다.<br>
+      • 주소창의 <code>URLSearchParams</code>가 동기화되어 뒤로 가기 및 새로고침 시에도 상태가 복원됩니다.
+    </div>
+  </div>
+</div>
+
+<script>
+  const SORTS = ['latest', 'views', 'oldest'];
+  const MORE_LABEL = '다음 10개 더 불러오기 (Keyset)';
+
+  let mode = 'offset';
+  let state = { page: 1, limit: 10, sort: 'latest', search: '', cursor: null, hasNext: true };
+  let cursorPosts = [];
+  let currentAbortController = null;
+  let requestSeq = 0;
+  let debounceTimer = null;
+
+  const $ = (id) => document.getElementById(id);
+
+  function esc(v) {
+    return String(v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  function readUrlState() {
+    const params = new URLSearchParams(window.location.search);
+    const p = parseInt(params.get('page'), 10);
+    const sort = params.get('sort');
+    state.page = Number.isInteger(p) && p > 0 ? p : 1;
+    state.sort = SORTS.includes(sort) ? sort : 'latest';
+    state.search = (params.get('search') || '').trim();
+    $('searchInput').value = state.search;
+    $('sortSelect').value = state.sort;
+  }
+
+  function setModeUI(newMode) {
+    mode = newMode;
+    $('tabOffset').classList.toggle('active', mode === 'offset');
+    $('tabCursor').classList.toggle('active', mode === 'cursor');
+    $('paginationBar').style.display = mode === 'offset' ? 'flex' : 'none';
+    $('cursorMoreWrap').style.display = mode === 'cursor' ? 'flex' : 'none';
+
+    $('sortSelect').disabled = mode === 'cursor';
+    $('modeNote').textContent = mode === 'cursor'
+      ? '커서 모드는 정렬 기준이 id 내림차순(최신순)으로 고정되어 정렬 선택이 비활성화됩니다. 검색어는 적용됩니다.'
+      : '';
+  }
+
+  function switchMode(newMode) {
+    if (newMode === mode) return;
+    clearTimeout(debounceTimer);
+    setModeUI(newMode);
+    state.page = 1;
+    resetCursor();
+    loadData({ history: newMode === 'offset' ? 'replace' : 'none' });
+  }
+
+  function resetCursor() {
+    state.cursor = null;
+    state.hasNext = true;
+    cursorPosts = [];
+  }
+
+  function resetAndLoad() {
+    state.page = 1;
+    resetCursor();
+    loadData({ history: 'push' });
+  }
+
+  async function loadData({ history: hist = 'none', append = false } = {}) {
+    if (currentAbortController) currentAbortController.abort();
+    const controller = new AbortController();
+    currentAbortController = controller;
+    const { signal } = controller;
+    const seq = ++requestSeq;
+
+    const t0 = performance.now();
+    const q = new URLSearchParams({ limit: state.limit });
+    let endpoint;
+
+    if (mode === 'offset') {
+      q.set('page', state.page);
+      q.set('sort', state.sort);
+      if (state.search) q.set('search', state.search);
+      endpoint = `/api/posts?${q}`;
+      syncUrl(q, hist);
+    } else {
+      if (state.search) q.set('search', state.search);
+      if (append && state.cursor) q.set('cursor', state.cursor);
+      endpoint = `/api/posts/cursor?${q}`;
+    }
+
+    $('inspectUrl').textContent = `GET ${endpoint}`;
+    setLoading(true);
+
+    try {
+      const res = await fetch(endpoint, { signal });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
+      if (signal.aborted || seq !== requestSeq) return;
+
+      $('latencyBadge').textContent = `${(performance.now() - t0).toFixed(2)}ms`;
+      $('inspectJson').textContent = JSON.stringify(json, null, 2);
+      updateSqlInspector(json.meta);
+
+      if (mode === 'offset') {
+        if (json.meta.page !== state.page) {
+          state.page = json.meta.page;
+          syncUrl(new URLSearchParams({ ...Object.fromEntries(q), page: state.page }), 'replace');
+        }
+        $('resultInfo').textContent = `총 ${json.meta.totalCount.toLocaleString()}건 · ${json.meta.page} / ${json.meta.totalPages} 페이지`;
+        renderTable(json.items);
+        renderPagination(json.meta.page, json.meta.totalPages);
+      } else {
+        const base = append ? cursorPosts : [];
+        const seen = new Set(base.map((p) => p.id));
+        cursorPosts = [...base, ...json.items.filter((p) => !seen.has(p.id))];
+        state.cursor = json.meta.nextCursor;
+        state.hasNext = json.meta.hasNext;
+        $('resultInfo').textContent = `${cursorPosts.length.toLocaleString()}건 로드됨`;
+        renderTable(cursorPosts);
+      }
+      setLoading(false);
+    } catch (err) {
+      if (err.name === 'AbortError') {
+        console.log('[AbortController] 이전 비동기 요청이 정상 취소되었습니다.');
+        return;
+      }
+      if (seq !== requestSeq) return;
+      console.error('Fetch error:', err);
+      $('tableBody').innerHTML = '<tr><td colspan="5" style="text-align:center; padding:30px; color:var(--danger);">데이터를 불러오지 못했습니다. 잠시 후 다시 시도하세요.</td></tr>';
+      setLoading(false);
+    }
+  }
+
+  function setLoading(loading) {
+    $('tableWrap').classList.toggle('loading', loading);
+    const btn = $('btnMore');
+    btn.disabled = loading || !state.hasNext;
+    btn.textContent = state.hasNext ? MORE_LABEL : '더 이상 글이 없습니다';
+  }
+
+  function syncUrl(q, hist) {
+    if (hist === 'none') return;
+    const next = `?${q}`;
+    if (next === window.location.search) return;
+    if (hist === 'push') window.history.pushState({}, '', next);
+    else window.history.replaceState({}, '', next);
+  }
+
+  function renderTable(items) {
+    const tb = $('tableBody');
+    if (!items || items.length === 0) {
+      tb.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:30px; color:#8d9aaf;">검색 조건에 일치하는 글이 없습니다.</td></tr>';
+      return;
+    }
+    tb.innerHTML = items.map((p) => `
+      <tr>
+        <td style="color:#0066cc; font-weight:700;">${esc(p.id)}</td>
+        <td style="font-weight:600;">${esc(p.title)}</td>
+        <td>${esc(p.author)}</td>
+        <td style="color:#0066cc; font-weight:600;">${Number(p.views).toLocaleString()}</td>
+        <td style="color:#8d9aaf;">${esc(p.createdAt)}</td>
+      </tr>
+    `).join('');
+  }
+
+  function renderPagination(page, totalPages) {
+    const bar = $('paginationBar');
+    let html = '';
+    const start = Math.max(1, page - 3);
+    const end = Math.min(totalPages, page + 3);
+
+    if (page > 1) {
+      html += `<button class="page-btn" onclick="goToPage(1)">«</button>`;
+      html += `<button class="page-btn" onclick="goToPage(${page - 1})">‹</button>`;
+    }
+    for (let i = start; i <= end; i++) {
+      html += `<button class="page-btn ${i === page ? 'active' : ''}" onclick="goToPage(${i})">${i}</button>`;
+    }
+    if (page < totalPages) {
+      html += `<button class="page-btn" onclick="goToPage(${page + 1})">›</button>`;
+      html += `<button class="page-btn" onclick="goToPage(${totalPages})">»</button>`;
+    }
+    bar.innerHTML = html;
+  }
+
+  function goToPage(p) {
+    state.page = p;
+    loadData({ history: 'push' });
+  }
+
+  function loadMoreCursor() {
+    if (state.hasNext) loadData({ append: true });
+  }
+
+  function applySearch() {
+    clearTimeout(debounceTimer);
+    state.search = $('searchInput').value.trim();
+    resetAndLoad();
+  }
+
+  function updateSqlInspector(meta) {
+    const where = state.search ? `(title LIKE '%${state.search}%' OR content LIKE '%${state.search}%')` : '';
+    if (mode === 'offset') {
+      const sortClause = { latest: 'id DESC', views: 'views DESC, id DESC', oldest: 'id ASC' }[meta.sort] || 'id DESC';
+      const offset = (meta.page - 1) * meta.limit;
+      $('inspectSql').textContent =
+        `SELECT id, title, author, views, created_at FROM posts ${where ? 'WHERE ' + where + ' ' : ''}` +
+        `ORDER BY ${sortClause} LIMIT ${meta.limit} OFFSET ${offset};`;
+    } else {
+      const conds = [];
+      if (where) conds.push(where);
+      if (meta.cursor) conds.push(`id < ${meta.cursor}`);
+      $('inspectSql').textContent =
+        `SELECT id, title, author, views, created_at FROM posts ${conds.length ? 'WHERE ' + conds.join(' AND ') + ' ' : ''}` +
+        `ORDER BY id DESC LIMIT ${meta.limit + 1};`;
+    }
+  }
+
+  $('searchInput').addEventListener('input', (e) => {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+      state.search = e.target.value.trim();
+      resetAndLoad();
+    }, 300);
+  });
+
+  $('sortSelect').addEventListener('change', (e) => {
+    state.sort = SORTS.includes(e.target.value) ? e.target.value : 'latest';
+    resetAndLoad();
+  });
+
+  window.addEventListener('popstate', () => {
+    clearTimeout(debounceTimer);
+    setModeUI('offset');
+    resetCursor();
+    readUrlState();
+    loadData({ history: 'none' });
+  });
+
+  window.addEventListener('DOMContentLoaded', () => {
+    setModeUI('offset');
+    readUrlState();
+    loadData({ history: 'none' });
+  });
+</script>
+</body>
+</html>
